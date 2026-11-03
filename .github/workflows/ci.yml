@@ -1,0 +1,22 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+      - run: pip install -r backend/requirements-dev.txt
+      - run: cd backend && pytest -q
+      - run: cd backend && python -m evaluation.run_eval --out evaluation/results
+      - uses: actions/upload-artifact@v4
+        with: { name: eval-report, path: backend/evaluation/results }
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: cd frontend && npm ci && npm run build
