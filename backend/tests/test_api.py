@@ -89,6 +89,23 @@ def test_approve_and_resolve(client, files):
     assert a["review_status"] == "approved" and all(i["resolved"] for i in a["issues"])
 
 
+def test_resolve_single_issue_invoice_detail_and_file_download(client, files):
+    path, _ = files["nodate"]
+    _, ids = upload(client, path, name="nodate3.pdf")
+    rec = wait_done(client, ids[0])["invoices"][0]
+    detail = client.get(f"/api/invoices/{rec['id']}").json()
+    assert detail["id"] == rec["id"] and detail["invoice_date"] is None and detail["raw_text"]
+    issue = next(i for i in detail["issues"] if i["field"] == "invoice_date")
+    r = client.post(f"/api/issues/{issue['id']}/resolve").json()
+    assert r["id"] == issue["id"] and r["resolved"] is True
+    after = client.get(f"/api/invoices/{rec['id']}").json()
+    assert next(i for i in after["issues"] if i["id"] == issue["id"])["resolved"]
+    f = client.get(f"/api/documents/{ids[0]}/file")
+    assert f.status_code == 200 and f.content == path.read_bytes()
+    assert client.get("/api/invoices/999999").status_code == 404
+    assert client.post("/api/issues/999999/resolve").status_code == 404
+
+
 def test_search_keyword_filters_and_semantic(client, files):
     path, inv = files["digital"]
     _, ids = upload(client, path, name="searchable.pdf")

@@ -14,7 +14,7 @@ The assistant ran the Docker/PostgreSQL stack for the first time and fixed what 
 * `.env.example` used inline comments (`KEY=   # text`); docker compose reads those as the value, so the comment became the Anthropic key and the API key (LLM "enabled" with a junk key, every call 401). Comments moved to their own lines.
 * The `uploads` named volume was created root-owned (the mount point did not exist in the image), so the non-root container could not save uploads (HTTP 500). The Dockerfile now creates `/data/uploads` owned by `appuser`.
 * PyMuPDF error messages leaked the server storage path to API clients; the path is now reduced to the file name.
-* Added an `.xls` (BIFF) test, then re-ran the 53 tests and the evaluation inside the backend image (Tesseract 5.5) and refreshed `EVALUATION_REPORT.md` / `TEST_RESULTS.txt`.
+* Added an `.xls` (BIFF) test, then re-ran the tests (now 54, incl. a new one for issue-resolve, invoice detail and original-file download) and the evaluation inside the backend image (Tesseract 5.5) and refreshed `EVALUATION_REPORT.md` / `TEST_RESULTS.txt`.
 
 ## Runtime prompt (sent to the LLM when `ANTHROPIC_API_KEY` is set)
 Source of truth: `backend/app/extraction/llm.py` (`SYSTEM`). The user turn is the invoice text wrapped in `<document>…</document>`. Key properties: temperature 0, JSON-only output, "never guess / return null", per-field confidence, and an explicit instruction to ignore instructions embedded in the document (prompt-injection defence). The response is then schema-normalised and grounded against the source text in `extractor.py`.
