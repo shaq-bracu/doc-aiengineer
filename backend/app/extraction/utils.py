@@ -96,6 +96,28 @@ def compact(s: str) -> str:
     return re.sub(r"[\W_]+", "", str(s).casefold(), flags=re.UNICODE)
 
 
+_LOOKALIKE_FOLD = str.maketrans("ilIL|!oOsSbBzZ", "11111100558822")
+
+
+def fold_lookalikes(s: str) -> str:
+    """Collapse characters OCR confuses, so S1/2025 and SI/2025 compare equal."""
+    return str(s).translate(_LOOKALIKE_FOLD)
+
+
+def has_lookalike(value: str) -> bool:
+    """True if a segment of an ID mixes letters and digits the way OCR misreads do: S1 for SI, 2O25 for 2025."""
+    for seg in re.split(r"[\W_]+", str(value)):
+        letters = [c.upper() for c in seg if c.isalpha()]
+        digits = [c for c in seg if c.isdigit()]
+        if not letters or not digits:
+            continue
+        if (len(digits) == 1 or len(digits) < len(letters)) and set(digits) <= set("0158"):
+            return True
+        if (len(letters) == 1 or len(letters) < len(digits)) and set(letters) <= set("OIL"):
+            return True
+    return False
+
+
 def text_contains(text_norm: str, value: str, threshold: int = 85) -> bool:
     v = norm_text(value)
     if not v:

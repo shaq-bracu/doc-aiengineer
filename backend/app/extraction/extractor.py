@@ -5,12 +5,13 @@ import re
 from ..config import settings
 from . import rules
 from .llm import llm_available, llm_extract
-from .utils import (CURRENCY_SYMBOLS, ISO_CODES, amount_in_text, clip_text, date_in_text, id_in_text,
+from .utils import (CURRENCY_SYMBOLS, ISO_CODES, amount_in_text, clip_text, date_in_text, has_lookalike, id_in_text,
                     norm_text, normalize_date, parse_amount, text_contains)
 
 log = logging.getLogger("extract")
 SCALARS = ["invoice_number", "invoice_date", "supplier_name", "customer_name", "subtotal", "tax", "total", "currency"]
 FIELDS = SCALARS + ["line_items"]
+LOOKALIKE_CONFIDENCE = 0.55   # below the review threshold
 
 
 def _str(v):
@@ -104,4 +105,8 @@ def extract_invoice(text: str, ocr_conf: float | None = None, mode: str | None =
     if ocr_conf is not None:  # OCR noise lowers trust in every field
         scale = max(0.5, min(1.0, ocr_conf / 80.0))
         c = {k: round(v * scale, 3) for k, v in c.items()}
+        number = f.get("invoice_number")
+        if number and (has_lookalike(number) or (r["noisy_number"] and number == r["fields"]["invoice_number"])):
+            notes.append("lookalike:invoice_number")
+            c["invoice_number"] = min(c["invoice_number"], LOOKALIKE_CONFIDENCE)
     return {"fields": f, "confidence": c, "notes": notes, "method": method}

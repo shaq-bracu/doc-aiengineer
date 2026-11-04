@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 
 from .config import settings
-from .extraction.utils import compact, norm_text
+from .extraction.utils import compact, fold_lookalikes, norm_text
 from .models import Invoice, ValidationIssue
 
 REQUIRED_ERROR = ["invoice_number", "invoice_date", "supplier_name", "total"]
@@ -19,7 +19,8 @@ def _issue(code, severity, field, message):
 
 
 def dedupe_key(invoice_number):
-    k = compact(invoice_number) if invoice_number else ""
+    """Look-alike characters fold together, so a scan's S1/2025/7 still meets the spreadsheet's SI/2025/7."""
+    k = fold_lookalikes(compact(invoice_number)) if invoice_number else ""
     return k[:80] or None
 
 
@@ -41,6 +42,10 @@ def check_fields(inv: dict, conf: dict | None = None, notes: list | None = None)
                               f"Value for '{what}' could not be parsed"))
         elif kind == "ungrounded":
             out.append(_issue("uncertain_value", "warning", what, f"A value for '{what}' was not found in the source text and was dropped"))
+        elif kind == "lookalike":
+            out.append(_issue("uncertain_value", "warning", what, f"OCR read this as '{inv.get(what)}', which contains characters it often confuses, such as I and 1. Check it against the source."))
+        elif kind == "repaired":
+            out.append(_issue("lookalike_repaired", "info", what, "OCR read a look-alike character here. Corrected to match this supplier's other invoices in the file."))
 
     sub, tax, tot = inv.get("subtotal"), inv.get("tax"), inv.get("total")
     for k, v in (("subtotal", sub), ("tax", tax), ("total", tot)):
@@ -82,8 +87,9 @@ def check_fields(inv: dict, conf: dict | None = None, notes: list | None = None)
             out.append(_issue("line_items_mismatch", "error", "line_items", f"Line items sum to {line_sum}, but {ref_name} is {ref}"))
 
     th = settings.REVIEW_CONFIDENCE_THRESHOLD
+    explained = {i["field"] for i in out if i["code"] == "uncertain_value"}
     for k in CONFIDENCE_CHECKED:
-        if inv.get(k) not in (None, "") and (conf or {}).get(k, 1.0) < th:
+        if k not in explained and inv.get(k) not in (None, "") and (conf or {}).get(k, 1.0) < th:
             out.append(_issue("low_confidence", "warning", k, f"Low confidence ({(conf or {}).get(k):.2f}) for '{k}'"))
     return out
 
@@ -119,6 +125,17 @@ def check_duplicates(session, inv: Invoice) -> list[dict]:
         else:
             out.append(_issue("duplicate_invoice", "error", "invoice_number", f"Exact duplicate of {where}"))
     return out
+
+
+def refresh_dedupe_keys(session) -> int:
+    """Bring rows stored before the key format changed up to date, so old invoices still meet new ones."""
+    changed = 0
+    for inv in session.scalars(select(Invoice).where(Invoice.invoice_number.is_not(None))):
+        key = dedupe_key(inv.invoice_number)
+        if inv.dedupe_key != key:
+            inv.dedupe_key = key
+            changed += 1
+    return changed
 
 
 def apply_validation(session, inv: Invoice) -> None:

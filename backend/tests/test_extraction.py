@@ -1,3 +1,5 @@
+import pytest
+
 from app.extraction import extractor
 from app.extraction import rules
 from app.pipeline import segment_pages
@@ -64,6 +66,19 @@ def test_low_ocr_confidence_lowers_field_confidence():
     hi = extractor.extract_invoice(SAMPLE, ocr_conf=95, mode="rules")["confidence"]["total"]
     lo = extractor.extract_invoice(SAMPLE, ocr_conf=40, mode="rules")["confidence"]["total"]
     assert lo < hi
+
+
+@pytest.mark.parametrize("row,expect", [
+    ("Maintenance service 2. 385.58 771.16", ("Maintenance service", 2.0, 385.58)),
+    ("LED panel light 5: 169.17 845.85", ("LED panel light", 5.0, 169.17)),
+    ("Office chair 4 39,52 158.08", ("Office chair", 4.0, 39.52)),
+    ("Cardboard cartons T 465.87 3261.09", ("Cardboard cartons", None, 465.87)),       # unreadable quantity stays empty
+    ("Bolts M8 2.50 5.00", ("Bolts M8 2.50", None, None)),                            # M8 is part of the name, so leave it
+    ("Cardboard cartons C4 72.48 144.96", ("Cardboard cartons C4 72.48", None, None)),  # 4 x 72.48 is not 144.96: no proof
+])
+def test_line_rows_survive_ocr_noise_in_the_quantity(row, expect):
+    item = rules.extract_line_items(["Description Qty Unit Price Amount", row, "Subtotal: 1.00"])[0]
+    assert (item["description"], item["quantity"], item["unit_price"]) == expect
 
 
 def test_segment_pages_splits_on_new_invoice_number():

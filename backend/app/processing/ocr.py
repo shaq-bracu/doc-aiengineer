@@ -1,4 +1,4 @@
-"""OCR with OpenCV pre-processing (upscale -> denoise -> deskew -> optional binarise)."""
+"""OCR with OpenCV pre-processing (upscale -> deskew, then denoise + binarise only if the first read is weak)."""
 import os
 import shutil
 
@@ -43,7 +43,6 @@ def preprocess(img: np.ndarray) -> np.ndarray:
     if max(gray.shape) < 1600:  # low-res input: upscale so glyphs are >= ~20px tall
         f = 1600 / max(gray.shape)
         gray = cv2.resize(gray, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.medianBlur(gray, 3)
     return _deskew(gray)
 
 
@@ -69,14 +68,17 @@ def _run(img: np.ndarray, lang: str):
 
 
 def ocr_image(img: np.ndarray, lang: str | None = None) -> tuple[str, float]:
-    """Return (text, mean_word_confidence 0-100). Tries a binarised variant when confidence is low."""
+    """Return (text, mean_word_confidence 0-100). Tries denoised and binarised variants when confidence is low.
+    A median blur on every page erodes thin strokes: measured on scanned invoice numbers it costs accuracy and time."""
     if not ocr_available():
         raise OCRUnavailable("Tesseract binary not found; install tesseract-ocr to process scanned files")
     lang = lang or settings.OCR_LANGS
     gray = preprocess(img)
     best = _run(gray, lang)
     if best[1] < 70:
-        alt = _run(_binarize(gray), lang)
-        if alt[1] > best[1]:
-            best = alt
+        denoised = cv2.medianBlur(gray, 3)
+        for variant in (denoised, _binarize(denoised)):
+            alt = _run(variant, lang)
+            if alt[1] > best[1]:
+                best = alt
     return best

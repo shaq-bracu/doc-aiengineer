@@ -5,6 +5,7 @@ import re
 import threading
 import time
 import traceback
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from sqlalchemy import delete, select
@@ -14,6 +15,7 @@ from .db import session_scope
 from .extraction import rules
 from .extraction.extractor import extract_invoice
 from .extraction.tabular import extract_table
+from .extraction.utils import fold_lookalikes, norm_text
 from .models import Chunk, Document, Invoice, ProcessingEvent, ValidationIssue, utcnow
 from .processing.readers import CorruptFileError, Page, read_image, read_pdf, read_spreadsheet
 from .search import index_document
@@ -21,6 +23,8 @@ from .validation import apply_validation, dedupe_key
 
 log = logging.getLogger("pipeline")
 _VALIDATION_LOCK = threading.Lock()   # makes duplicate detection deterministic under concurrent workers
+MIN_CLEAN_READS = 3                   # readings needed before a batch can vouch for a look-alike number
+REPAIRED_CONFIDENCE = 0.75
 
 
 def log_event(s, doc, stage, msg, level="info", ms=None):
@@ -34,18 +38,56 @@ def set_progress(s, doc, stage, progress):
 
 
 def segment_pages(pages: list[Page]) -> list[list[Page]]:
-    """Split a multi-page PDF into invoices: a new invoice starts when a page shows a different invoice number."""
+    """Split a multi-page PDF into invoices: a new invoice starts when a page shows a different invoice number,
+    or carries an invoice-number label whose value could not be read (merging it would mix two invoices' fields)."""
+    same = lambda a, b: fold_lookalikes(re.sub(r"\W", "", a).lower()) == fold_lookalikes(re.sub(r"\W", "", b).lower())
     segs: list[list[Page]] = []
-    cur_no = None
+    cur_no, cur_labelled = None, False
     for p in pages:
         no = rules.find_invoice_number(p.text) if p.text else None
-        if not segs or (no and cur_no and re.sub(r"\W", "", no).lower() != re.sub(r"\W", "", cur_no).lower()):
+        labelled = bool(no) or (bool(p.text) and rules.has_invoice_label(p.text))
+        if not segs or (labelled and cur_labelled and not (no and cur_no and same(no, cur_no))):
             segs.append([p])
-            cur_no = no
+            cur_no, cur_labelled = no, labelled
         else:
             segs[-1].append(p)
-            cur_no = cur_no or no
+            cur_no, cur_labelled = cur_no or no, cur_labelled or labelled
     return segs
+
+
+def _split_serial(number: str) -> tuple[str, str]:
+    """'SI/2025/00020' -> ('SI/2025/', '00020'): the part of a number that stays the same, and its running serial."""
+    m = re.fullmatch(r"(.*\D)?(\d+)", number)
+    return (m.group(1) or "", m.group(2)) if m else (number, "")
+
+
+def reconcile_lookalike_numbers(invoices: list[Invoice]) -> None:
+    """Inside one file, repair numbers OCR may have misread when the supplier's other invoices settle the question.
+
+    OCR turns a real SI/ into S1/ often, but a real S1/ was never read as SI/ when this was measured. So a clear majority
+    of clean readings from the same supplier is real evidence. Without it the number keeps its review flag."""
+    groups = defaultdict(list)
+    for inv in invoices:
+        if inv.invoice_number and inv.supplier_name:
+            prefix, serial = _split_serial(inv.invoice_number)
+            if prefix:
+                groups[norm_text(inv.supplier_name), fold_lookalikes(prefix)].append((inv, prefix, serial))
+    for members in groups.values():
+        flagged = [m for m in members if "lookalike:invoice_number" in (m[0].extraction_notes or [])]
+        clean = Counter(m[1] for m in members if m not in flagged)
+        if not flagged or not clean:
+            continue
+        best, reads = clean.most_common(1)[0]
+        if reads < MIN_CLEAN_READS or reads <= len(members) - reads:
+            continue
+        width = Counter(len(m[2]) for m in members if m not in flagged).most_common(1)[0][0]
+        for inv, _, serial in flagged:
+            if len(serial) != width:          # e.g. '0091 1' cut to '0091': the serial is damaged too, so a person decides
+                continue
+            inv.invoice_number = best + serial
+            inv.dedupe_key = dedupe_key(inv.invoice_number)
+            inv.confidence = {**inv.confidence, "invoice_number": REPAIRED_CONFIDENCE}
+            inv.extraction_notes = [n for n in inv.extraction_notes if n != "lookalike:invoice_number"] + ["repaired:invoice_number"]
 
 
 def _new_invoice(doc, idx, res, **kw) -> Invoice:
@@ -108,6 +150,7 @@ def _run(s, doc: Document, t_start: float):
             res = extract_invoice(text, _mean([p.ocr_conf for p in seg]))
             invoices.append(_new_invoice(doc, i, res, page_start=seg[0].number, page_end=seg[-1].number, raw_text=text[:100_000]))
             doc.progress = round(0.62 + 0.2 * (i + 1) / len(segs), 3)
+        reconcile_lookalike_numbers(invoices)
     else:
         n = 0
         for sh in sheets:

@@ -10,8 +10,11 @@ _STOP = (r"(?:invoice|inv|date|due|total|tax|vat|po|p\.o|phone|tel|email|e-mail|
 _STOP_RX = re.compile(rf"\s+(?={_STOP}\b[^:,]{{0,30}}:)", re.I)
 _LABEL_LINE = re.compile(r"^\s*[A-Za-z #.]{2,25}:\s*\S")
 
-INV_NO = re.compile(r"(?:invoice|inv)\s*(?:(?:number|num|no|id)\b\.?|#)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9\-/_.]{1,30})", re.I)
-INV_NO2 = re.compile(r"\binvoice\s*[:#]\s*([A-Z0-9][A-Z0-9\-/_.]{2,30})", re.I)
+# ! | $ are never part of an invoice number, but OCR reads a bare I as ! or | and an S as $
+INV_NO = re.compile(r"(?:invoice|inv)\s*(?:(?:number|num|no|id)\b\.?|#)\s*[:#.\-]?\s*([A-Z0-9$][A-Z0-9\-/_.!|$]{1,30})", re.I)
+INV_NO2 = re.compile(r"\binvoice\s*[:#]\s*([A-Z0-9$][A-Z0-9\-/_.!|$]{2,30})", re.I)
+# a header field ('Invoice Number:', 'Invoice #'), not a phrase like 'please quote the invoice number when paying'
+INV_LABEL = re.compile(r"\b(?:invoice|inv)\s*(?:(?:number|num|no|id)\b\.?\s*[:#]|#)", re.I)
 
 SUB_RX = re.compile(r"^\W*(?:sub[\s\-]?total|net\s+(?:amount|total)|total\s+before\s+tax|amount\s+before\s+tax|taxable\s+(?:amount|value))\b", re.I)
 TAX_RX = re.compile(r"^\W*(?:total\s+|sales\s+)?(?:tax|vat|gst|hst)\b(?!\s*(?:id|no\b|number|reg|#))", re.I)
@@ -21,6 +24,24 @@ SUMMARY_RX = re.compile(r"^\W*(?:sub[\s\-]?total|net\s+(?:amount|total)|total|gr
 
 ROW_FULL = re.compile(r"^(?P<d>.*?[A-Za-z].*?)\s+(?P<q>\d+(?:\.\d+)?)\s+(?P<p>\d[\d,]*\.\d{1,2})\s+(?P<a>\d[\d,]*\.\d{1,2})$")
 ROW_2 = re.compile(r"^(?P<d>.*?[A-Za-z].*?)\s+(?P<a>\d[\d,]*\.\d{1,2})$")
+ROW_TAIL = re.compile(r"^(?P<d>.*?[A-Za-z].*?)\s+(?P<q>\S{1,3})\s+(?P<p>\d[\d,]*[.,]\d{1,2})$")
+
+
+def _recover_row(desc: str, amount):
+    """OCR noise in the quantity ('2.', '5:', 'T') breaks the full row pattern and leaves quantity and price glued to the
+    description. The row's own arithmetic shows where the columns are; a quantity is kept only if the page shows it."""
+    m = ROW_TAIL.match(desc)
+    price = parse_amount(m["p"]) if m else None
+    if not price or amount is None:
+        return None
+    units = amount / price
+    if abs(units - round(units)) > 1e-6 or not 1 <= round(units) <= 99999:
+        return None
+    shown = re.sub(r"[^\d]", "", m["q"])
+    if not (len(m["q"]) == 1 or (shown and int(shown) == round(units))):
+        return None                                   # e.g. 'Bolts M8 2.50': M8 belongs to the description
+    return {"description": m["d"].strip(), "quantity": float(round(units)) if shown and int(shown) == round(units) else None,
+            "unit_price": price, "amount": amount}
 
 
 def clean_value(s: str) -> str:
@@ -49,13 +70,36 @@ def label_value(lines, pattern, lookahead=2):
     return None, None
 
 
-def find_invoice_number(text: str):
+def _undo_ocr_noise(v: str) -> str:
+    out = []
+    for i, ch in enumerate(v):
+        if ch in "!|":
+            ch = "I" if i and v[i - 1].isalpha() else "1"
+        elif ch == "$":
+            ch = "S"
+        out.append(ch)
+    return "".join(out)
+
+
+def read_invoice_number(text: str):
+    """-> (number | None, noisy): `noisy` means OCR-noise characters had to be mapped back to get the number."""
     for rx in (INV_NO, INV_NO2):
         for m in rx.finditer(text):
-            v = m.group(1).strip(".-/_")
+            raw = m.group(1).strip(".-/_|!")
+            if re.fullmatch(r"\$[\d.,]+", raw):       # "Invoice #: $120.00" is an amount, not a number
+                continue
+            v = _undo_ocr_noise(raw)
             if re.search(r"\d", v) and len(v) >= 3:
-                return v
-    return None
+                return v, v != raw
+    return None, False
+
+
+def find_invoice_number(text: str):
+    return read_invoice_number(text)[0]
+
+
+def has_invoice_label(text: str) -> bool:
+    return bool(INV_LABEL.search(text))
 
 
 def amount_on_line(line: str):
@@ -104,7 +148,8 @@ def extract_line_items(lines):
         m = ROW_2.match(s)
         if m:
             d = re.sub(r"^\d{1,3}[.)]?\s+(?=[A-Za-z])", "", m["d"]).strip()
-            items.append({"description": d, "quantity": None, "unit_price": None, "amount": parse_amount(m["a"])})
+            amount = parse_amount(m["a"])
+            items.append(_recover_row(d, amount) or {"description": d, "quantity": None, "unit_price": None, "amount": amount})
     return items
 
 
@@ -112,7 +157,7 @@ def extract(text: str) -> dict:
     lines = [l.rstrip() for l in text.splitlines() if l.strip()]
     f, c = {}, {}
 
-    f["invoice_number"] = find_invoice_number(text)
+    f["invoice_number"], noisy_number = read_invoice_number(text)
     c["invoice_number"] = 0.9 if f["invoice_number"] else 0.0
 
     # date: prefer an explicitly labelled invoice date, never a due date
@@ -162,4 +207,4 @@ def extract(text: str) -> dict:
     f["currency"], c["currency"] = detect_currency(text)
     f["line_items"] = extract_line_items(lines)
     c["line_items"] = 0.85 if f["line_items"] else 0.0
-    return {"fields": f, "confidence": c}
+    return {"fields": f, "confidence": c, "noisy_number": noisy_number}
