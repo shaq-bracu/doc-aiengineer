@@ -12,7 +12,7 @@ AI-powered pipeline that ingests invoices as **PDF, JPG, PNG, TIFF, XLSX, XLS, C
 | 6 Frontend | `frontend/src/` (React + TypeScript + Vite) |
 | 7 Tests + evaluation | `backend/tests/` (97 tests), `backend/evaluation/`, `docs/EVALUATION_REPORT.md` |
 
-Architecture diagram: [`docs/architecture.md`](docs/architecture.md) · DB schema: [`docs/schema.sql`](docs/schema.sql) · AI disclosure + prompts: [`docs/AI_PROMPTS_AND_DISCLOSURE.md`](docs/AI_PROMPTS_AND_DISCLOSURE.md) · Walkthrough script: [`docs/WALKTHROUGH_SCRIPT.md`](docs/WALKTHROUGH_SCRIPT.md)
+Architecture diagram: [`docs/architecture.md`](docs/architecture.md) · DB schema: [`docs/schema.sql`](docs/schema.sql) · AI disclosure + prompts: [`docs/AI_PROMPTS_AND_DISCLOSURE.md`](docs/AI_PROMPTS_AND_DISCLOSURE.md) · Walkthrough: [video](https://github.com/shaq-bracu/doc-aiengineer/releases/tag/walkthrough-v1), [script for a live recording](docs/WALKTHROUGH_SCRIPT.md)
 
 ## Deliverables checklist
 | # | Deliverable | Where | How it was verified |
@@ -24,7 +24,7 @@ Architecture diagram: [`docs/architecture.md`](docs/architecture.md) · DB schem
 | 5 | PDF, image, Excel, CSV pipelines | `backend/app/processing/` | Tests for digital/scanned/multi-page PDF, JPG/PNG/multi-page TIFF, XLSX, XLS, CSV and corrupt files |
 | 6 | Automated tests + results | `backend/tests/`, `docs/TEST_RESULTS.txt` | 97/97 passed inside the backend image (Tesseract 5.5, the bundled search model) |
 | 7 | Evaluation with measured metrics | `docs/EVALUATION_REPORT.md` | `python -m evaluation.run_eval` on a labelled 48-file / 75-invoice set, and `python -m evaluation.run_scale` on a 1,000-page scan |
-| 8 | Recorded walkthrough | link: *to be added* | Script in `docs/WALKTHROUGH_SCRIPT.md` |
+| 8 | Recorded walkthrough | [Video, 6:17](https://github.com/shaq-bracu/doc-aiengineer/releases/tag/walkthrough-v1) | Narrated screenshots of the running app with an AI voice, not a live screen recording. Its figures are checked against the evaluation report, and every spoken line was transcribed back against the script. Script for a live recording: `docs/WALKTHROUGH_SCRIPT.md` |
 | 9 | AI prompts + disclosure | `docs/AI_PROMPTS_AND_DISCLOSURE.md` | — |
 
 ## Setup

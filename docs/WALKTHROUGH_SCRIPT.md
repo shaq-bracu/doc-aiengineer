@@ -1,5 +1,5 @@
 # Walkthrough recording script (~6 min)
-*A video cannot be produced by the assistant — record this yourself (Loom/OBS) following the script.*
+*For a live screen recording (Loom/OBS). The [published video](https://github.com/shaq-bracu/doc-aiengineer/releases/tag/walkthrough-v1) is a separate version made from screenshots of the running app, with an AI voice; see [the AI disclosure](AI_PROMPTS_AND_DISCLOSURE.md).*
 
 1. **0:00 Architecture** — open `docs/architecture.md`; explain upload → queue → read → extract → ground → validate → index.
 2. **0:45 Start** — `docker compose up` (or the local steps); show `/api/health` and `/docs` (Swagger).

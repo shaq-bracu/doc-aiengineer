@@ -25,5 +25,16 @@ The assistant measured before changing anything, and kept the changes the measur
 * **Line items:** OCR noise in the quantity (`2.`, `5:`) no longer glues quantity and price onto the description when the row's arithmetic proves where the columns are.
 * Result on the same 1,000-page scan: all 1,000 invoices found, 99.9% of invoice numbers and totals right, 74 of 74 repairs correct, and every wrong header field sent to review. Labelled set: 97.3% of invoices fully correct (was 92.0%). 97 tests pass inside the backend image.
 
+**Walkthrough video (Claude Code, Remotion, ElevenLabs):**
+> Read the codebase and create a product walkthrough storyboard showing key features, smooth pans, and captions.
+>
+> Use ElevenLabs and generate a human-like male voiceover for the video that you produced. Read the captions you generated and guide through the video.
+
+The [video](https://github.com/shaq-bracu/doc-aiengineer/releases/tag/walkthrough-v1) is screenshots of the running app with animated camera moves, captions and narration. It is not a live screen recording.
+* **Written by the assistant:** the storyboard, captions, narration text and the Remotion project that renders the video. That project is kept outside this repository.
+* **Screens:** captured from the real app, driven through a browser on synthetic invoices with no API keys set, so extraction in the video comes from the rule extractor, not the LLM.
+* **Voice:** AI-generated with ElevenLabs (the "Justin Time" voice, `eleven_v4` model). No person recorded it, and the video's closing slide says so.
+* **Checks:** an automated check compares the video's figures with `EVALUATION_REPORT.md`. Every spoken line was transcribed locally with Whisper and compared with the script, and the timing and loudness of the rendered audio were measured. These cover the words and timing, not how natural the voice sounds, which the assistant cannot hear.
+
 ## Runtime prompt (sent to the LLM when `ANTHROPIC_API_KEY` is set)
 Source of truth: `backend/app/extraction/llm.py` (`SYSTEM`). The user turn is the invoice text wrapped in `<document>…</document>`. Key properties: temperature 0, JSON-only output, "never guess / return null", per-field confidence, and an explicit instruction to ignore instructions embedded in the document (prompt-injection defence). The response is then schema-normalised and grounded against the source text in `extractor.py`.
