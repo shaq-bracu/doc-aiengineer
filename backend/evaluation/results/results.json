@@ -12,26 +12,112 @@
   "tax": 1.0,
   "total": 1.0,
   "currency": 1.0,
-  "line_items": 0.9708888888888888
+  "line_items": 0.9966666666666667
  },
- "overall_field_accuracy": 0.995283950617284,
- "invoice_exact_match": 0.92,
+ "overall_field_accuracy": 0.9981481481481481,
+ "invoice_exact_match": 0.9733333333333334,
  "hallucination_rate": 0.0,
  "doc_success_rate": 1.0,
  "doc_failure_rate": 0.0,
  "corrupt_handled_gracefully": "4/4",
- "time_ms_mean": 225.22727272727272,
- "time_ms_p50": 45,
- "time_ms_p95": 575,
- "ms_per_page_mean": 241.61111111111111,
- "total_wall_s": 10.256702201999985,
- "throughput_docs_per_min": 280.792007341153,
+ "time_ms_mean": 297.75,
+ "time_ms_p50": 95,
+ "time_ms_p95": 685,
+ "ms_per_page_mean": 299.2537037037037,
+ "total_wall_s": 13.489832764999846,
+ "throughput_docs_per_min": 213.49412184503333,
  "validation_flag_recall": 1.0,
  "false_review_rate_on_clean": 0.0,
+ "wrong_extractions_sent_to_review": 0.0,
+ "wrong_extractions": [
+  {
+   "file": "photo_good_2.png",
+   "flagged": false,
+   "wrong": {
+    "line_items": {
+     "truth": [
+      {
+       "description": "Cloud hosting plan",
+       "quantity": 9.0,
+       "unit_price": 373.49,
+       "amount": 3361.41
+      },
+      {
+       "description": "Packing tape roll",
+       "quantity": 2.0,
+       "unit_price": 129.74,
+       "amount": 259.48
+      },
+      {
+       "description": "Cardboard cartons",
+       "quantity": 2.0,
+       "unit_price": 72.48,
+       "amount": 144.96
+      },
+      {
+       "description": "USB-C cable",
+       "quantity": 10.0,
+       "unit_price": 23.83,
+       "amount": 238.3
+      }
+     ],
+     "read": [
+      {
+       "description": "Cloud hosting plan",
+       "quantity": 9.0,
+       "unit_price": 373.49,
+       "amount": 3361.41
+      },
+      {
+       "description": "Packing tape roll",
+       "quantity": 2.0,
+       "unit_price": 129.74,
+       "amount": 259.48
+      },
+      {
+       "description": "Cardboard cartons C4 72.48",
+       "quantity": null,
+       "unit_price": null,
+       "amount": 144.96
+      },
+      {
+       "description": "USB-C cable",
+       "quantity": 10.0,
+       "unit_price": 23.83,
+       "amount": 238.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "file": "photo_poor_2.jpg",
+   "flagged": false,
+   "wrong": {
+    "invoice_number": {
+     "truth": "SI/2025/74418",
+     "read": "SV/2025/74418"
+    }
+   }
+  }
+ ],
  "search": {
   "keyword_supplier_hit": 1.0,
   "keyword_invoice_no_hit": 1.0,
-  "semantic_hit@5": 1.0,
-  "probes": 15
+  "name_phrase_hit@5": 1.0,
+  "probes": 15,
+  "embedder": "fastembed:sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "paraphrased": {
+   "hit@5": 1.0,
+   "mrr": 0.9125,
+   "recall_top5": 0.805,
+   "probes": 20
+  },
+  "paraphrased_text_pattern_baseline": {
+   "hit@5": 0.85,
+   "mrr": 0.5663759157509157,
+   "recall_top5": 0.37000000000000005,
+   "probes": 20
+  }
  }
 }

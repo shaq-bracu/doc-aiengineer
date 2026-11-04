@@ -8,5 +8,5 @@
 5. **3:15 Validation** — open `badtotal_*.pdf` (total mismatch), `nodate_*.pdf` (missing date left empty, not invented), `dup_*.pdf` (duplicate) and `xsource_mismatch.xlsx` (PDF ↔ Excel mismatch).
 6. **4:15 Correct** — fix the total, save → issues clear, status becomes Completed; approve another.
 7. **4:45 Failure & retry** — corrupt file shows a clear error; click Reprocess / "Retry all failed".
-8. **5:15 Search** — keyword by supplier, a filter on total range, then a semantic phrase.
-9. **5:45 Evidence** — show `docs/EVALUATION_REPORT.md`, `docs/TEST_RESULTS.txt` (54 passed) and be upfront about the limitations section.
+8. **5:15 Search** — keyword by supplier, a filter on total range, then a semantic phrase that shares no words with the invoices, such as "furniture for staff".
+9. **5:45 Evidence** — show `docs/EVALUATION_REPORT.md`, `docs/TEST_RESULTS.txt` (97 passed) and be upfront about the limitations section.

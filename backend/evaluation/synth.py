@@ -4,6 +4,7 @@ import datetime as dt
 import io
 import json
 import random
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -204,6 +205,41 @@ def write_csv(path, invs):
         d = dt.date.fromisoformat(inv["invoice_date"]).strftime("%d/%m/%Y")
         lines.append(f'{inv["invoice_number"]},{d},"{inv["supplier_name"]}","{inv["customer_name"]}",{inv["subtotal"]},{inv["tax"]},{inv["total"]},{inv["currency"]}')
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def unique_invoice(k: int) -> dict:
+    """The k-th invoice of a large batch: a fixed seed, and a number no other invoice in the batch has."""
+    tpl = k % 3 + 1
+    inv = make_invoice(random.Random(1000 + k), tpl)
+    inv["invoice_number"] = {1: f"INV-2025-{k:04d}", 2: str(20000 + k), 3: f"SI/2025/{k:05d}"}[tpl]
+    return inv
+
+
+def scanned_page(k: int) -> bytes:
+    """One invoice rendered, rasterised at 150 dpi, degraded like a flatbed scan and stored as a JPEG."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    draw_invoice(c, unique_invoice(k))
+    c.save()
+    doc = fitz.open(stream=buf.getvalue(), filetype="pdf")
+    pix = doc[0].get_pixmap(dpi=150, alpha=False)
+    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    doc.close()
+    out = io.BytesIO()
+    degrade(img, random.Random(k), "good").save(out, "JPEG", quality=50)
+    return out.getvalue()
+
+
+def build_scan(path, pages: int, start: int = 0) -> list[dict]:
+    """A multi-invoice scanned PDF, one invoice per page. Returns the labels, page by page."""
+    doc = fitz.open()
+    with ProcessPoolExecutor() as pool:
+        for jpg in pool.map(scanned_page, range(start, start + pages), chunksize=8):
+            page = doc.new_page(width=595, height=842)
+            page.insert_image(page.rect, stream=jpg)
+    doc.save(str(path), deflate=False)
+    doc.close()
+    return [{k: unique_invoice(i)[k] for k in FIELDS} for i in range(start, start + pages)]
 
 
 def truth(inv, csv=False):
