@@ -34,8 +34,9 @@ class Settings:
     REVIEW_CONFIDENCE_THRESHOLD = float(os.getenv("REVIEW_CONFIDENCE_THRESHOLD", "0.6"))
 
     # --- search ---
-    EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "auto")  # auto | st | hash
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+    EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "auto")  # auto | fastembed | hash
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    EMBEDDING_THREADS = _int("EMBEDDING_THREADS", 4)
 
 
 settings = Settings()

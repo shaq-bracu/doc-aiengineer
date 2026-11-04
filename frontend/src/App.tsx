@@ -227,7 +227,7 @@ function MetricsView() {
       </dl>
       <h2>Field fill rate</h2>
       <ul className="fill">{Object.entries(m.field_fill_rate).map(([k, v]: any) => <li key={k}><span>{LABEL[k] || k}</span><div className="bar"><i style={{ width: `${(v || 0) * 100}%` }} /></div><b>{pct(v)}</b></li>)}</ul>
-      <p className="meta">OCR engine: {h?.ocr_available ? "ready" : "missing — install Tesseract"} · Extraction: {h?.llm_enabled ? "LLM + rules" : "rules only (set ANTHROPIC_API_KEY for LLM)"} · Workers: {h?.workers}</p>
+      <p className="meta">OCR engine: {h?.ocr_available ? "ready" : "missing — install Tesseract"} · Extraction: {h?.llm_enabled ? "LLM + rules" : "rules only (set ANTHROPIC_API_KEY for LLM)"} · Search: {h?.semantic_search ? "semantic" : h?.search_embedder === "loading" ? "loading model" : "text patterns only (fastembed unavailable)"} · Workers: {h?.workers}</p>
     </section>
   );
 }

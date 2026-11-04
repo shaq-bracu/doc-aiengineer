@@ -4,6 +4,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr t
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# The semantic search model ships inside the image, so containers need no network and start ready
+ENV FASTEMBED_CACHE_PATH=/opt/models
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')" \
+    && chmod -R a+rX /opt/models
 COPY app ./app
 # /data/uploads must exist (owned by appuser) before the named volume mounts there, or Docker creates it root-owned
 RUN useradd -m appuser && mkdir -p /data/uploads && chown -R appuser /data

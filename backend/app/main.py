@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import secrets
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -16,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import get_db, init_db
+from .db import get_db, init_db, session_scope
 from .extraction.extractor import FIELDS
 from .extraction.llm import llm_available
 from .extraction.utils import normalize_date
@@ -24,10 +25,22 @@ from .models import Document, Invoice, ProcessingEvent, ValidationIssue
 from .pipeline import log_event, queue_, refresh_status
 from .processing.ocr import ocr_available
 from .processing.readers import UnsupportedFileError, sniff_type
-from .search import embedder, filtered_stmt, index_document, search as run_search
-from .validation import apply_validation, dedupe_key
+from .search import add_missing_line_item_chunks, embedder, embedder_status, filtered_stmt, index_document, reindex_stale_chunks, search as run_search
+from .validation import apply_validation, dedupe_key, refresh_dedupe_keys
 
 log = logging.getLogger("api")
+
+
+def _startup_maintenance():
+    """Load the search model before the first request needs it, and bring data from older versions up to date."""
+    try:
+        with session_scope() as s:
+            refresh_dedupe_keys(s)
+        n = reindex_stale_chunks() + add_missing_line_item_chunks()
+        if n:
+            log.info("Brought %d search chunks up to date for %s", n, embedder().name)
+    except Exception:
+        log.exception("Startup maintenance failed; it will run again on the next start")
 
 
 @asynccontextmanager
@@ -35,6 +48,7 @@ async def lifespan(app: FastAPI):
     init_db()
     queue_.start(settings.WORKERS)
     queue_.requeue_unfinished()      # crash recovery
+    threading.Thread(target=_startup_maintenance, name="maintenance", daemon=True).start()
     yield
 
 
@@ -360,4 +374,4 @@ app.include_router(router)
 @app.get("/api/health")
 def health():
     return {"status": "ok", "ocr_available": ocr_available(), "llm_enabled": llm_available() and settings.EXTRACTION_MODE != "rules",
-            "extraction_mode": settings.EXTRACTION_MODE, "workers": settings.WORKERS, "queue_depth": queue_.q.qsize()}
+            "extraction_mode": settings.EXTRACTION_MODE, **embedder_status(), "workers": settings.WORKERS, "queue_depth": queue_.q.qsize()}

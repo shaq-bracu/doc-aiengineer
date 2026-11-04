@@ -16,4 +16,4 @@ python-dateutil>=2.9
 rapidfuzz>=3.6
 scikit-learn>=1.4
 anthropic>=0.40
-# optional, better semantic search (multilingual incl. Bangla): pip install sentence-transformers
+fastembed>=0.7
